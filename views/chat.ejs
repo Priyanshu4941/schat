@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room - <%= roomName %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .chat-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        .chat-body {
+            flex: 1;
+            display: flex;
+            gap: 20px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .messages-container {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .users-sidebar {
+            width: 250px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .users-sidebar h5 {
+            color: #667eea;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .user-badge {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        .user-badge:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        .user-badge.you {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .message {
+            padding: 12px 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease-out;
+            max-width: 75%;
+            word-wrap: break-word;
+        }
+        .message.own {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+        }
+        .message.other {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+        .message-header {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+        .message-text {
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .system-message {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            font-style: italic;
+            margin: 10px 0;
+            padding: 8px;
+            background: #fff3cd;
+            border-radius: 10px;
+        }
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+            position: relative;
+        }
+        .chat-input {
+            flex: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 12px 20px;
+            font-size: 16px;
+        }
+        .chat-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 15px;
+            padding: 12px 30px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .emoji-btn {
+            background: #fff;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            width: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .emoji-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        .emoji-picker-wrapper {
+            position: absolute;
+            right: 140px;
+            bottom: 60px;
+            z-index: 10;
+            display: none;
+        }
+        .emoji-picker-wrapper.active {
+            display: block;
+        }
+        emoji-picker {
+            --emoji-font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Twemoji Mozilla';
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            max-width: 320px;
+        }
+        .emoji-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .emoji-toolbar button {
+            border: none;
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-weight: 600;
+            background: #f1f1f7;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .emoji-toolbar button.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .emoji-toolbar button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.35);
+        }
+        .romance-panel {
+            display: none;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            max-width: 320px;
+            padding: 15px;
+        }
+        .romance-panel.active {
+            display: block;
+        }
+        .romance-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+        .romance-emoji {
+            font-size: 28px;
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .romance-emoji:hover {
+            border-color: #ffc2d1;
+            background: #fff0f5;
+        }
+        .romance-locked {
+            padding: 10px;
+            text-align: center;
+            color: #d6336c;
+            font-size: 14px;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @media (max-width: 768px) {
+            .chat-body {
+                flex-direction: column;
+            }
+            .users-sidebar {
+                width: 100%;
+                max-height: 150px;
+            }
+            .message {
+                max-width: 85%;
+            }
+            .chat-card {
+                height: calc(100vh - 20px);
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid h-100">
+        <div class="row h-100">
+            <div class="col-12">
+                <div class="chat-card">
+                    <div class="chat-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-chat-dots"></i> <%= roomName %></h4>
+                            <small class="opacity-75">Room ID: <strong><%= roomId %></strong></small>
+                        </div>
+                        <a href="/welcome?user=<%= encodeURIComponent(userName) %>&email=<%= encodeURIComponent(userEmail) %>" class="btn btn-light btn-sm">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+
+                    <div class="chat-body">
+                        <div class="messages-container" id="messagesContainer">
+                            <!-- Messages will be displayed here -->
+                        </div>
+                        
+                        <div class="users-sidebar d-none d-md-block">
+                            <h5><i class="bi bi-people"></i> Users in Room</h5>
+                            <div id="usersList">
+                                <!-- Active users will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-area">
+                        <div class="emoji-picker-wrapper" id="emojiPickerWrapper">
+                            <div class="emoji-toolbar" id="emojiToolbar">
+                                <button type="button" data-mode="all" class="active" id="emojiAllBtn">All Emojis</button>
+                                <button type="button" data-mode="romance" id="emojiRomanceBtn">Romance</button>
+                            </div>
+                            <div class="romance-panel" id="romancePanel">
+                                <div id="romanceLocked" class="romance-locked text-center">
+                                    Enable romance pack in settings to access these emojis.
+                                </div>
+                                <div class="romance-grid" id="romanceGrid"></div>
+                            </div>
+                            <emoji-picker id="emojiPicker"></emoji-picker>
+                        </div>
+                        <button type="button" class="emoji-btn" id="emojiToggle" title="Add emoji">
+                            😀
+                        </button>
+                        <input 
+                            type="text" 
+                            id="messageInput" 
+                            class="form-control chat-input" 
+                            placeholder="Type your message..." 
+                            autocomplete="off"
+                        >
+                        <button id="sendBtn" class="btn send-btn">
+                            <i class="bi bi-send"></i> Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        /* eslint-disable */
+        const socket = io();
+        const roomId = '<%= roomId %>';
+        const userName = '<%= userName %>';
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const usersList = document.getElementById('usersList');
+        const emojiToggle = document.getElementById('emojiToggle');
+        const emojiPickerWrapper = document.getElementById('emojiPickerWrapper');
+        const emojiPicker = document.getElementById('emojiPicker');
+        const emojiAllBtn = document.getElementById('emojiAllBtn');
+        const emojiRomanceBtn = document.getElementById('emojiRomanceBtn');
+        const romancePanel = document.getElementById('romancePanel');
+        const romanceGrid = document.getElementById('romanceGrid');
+        const romanceLocked = document.getElementById('romanceLocked');
+
+        // Join room
+        socket.emit('join-room', { roomId: roomId, userName: userName });
+
+        // Display existing messages
+        const existingMessages = JSON.parse(`<%- JSON.stringify(messages) %>`);
+        existingMessages.forEach(msg => {
+            displayMessage(msg.userName, msg.message, msg.createdAt, msg.userName === userName);
+        });
+
+        // Display active users
+        const activeUsers = JSON.parse(`<%- JSON.stringify(activeUsers) %>`);
+        updateUsersList(activeUsers);
+
+        // Listen for new messages
+        socket.on('receive-message', (data) => {
+            displayMessage(data.userName, data.message, data.timestamp, data.userName === userName);
+        });
+
+        // Listen for user joined/left
+        socket.on('user-joined', (data) => {
+            displaySystemMessage(data.message);
+        });
+
+        socket.on('user-left', (data) => {
+            displaySystemMessage(data.message);
+        });
+
+        // Listen for active users update
+        socket.on('active-users', (users) => {
+            updateUsersList(users);
+        });
+
+        // Send message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message) {
+                socket.emit('send-message', {
+                    roomId: roomId,
+                    userName: userName,
+                    message: message
+                });
+                messageInput.value = '';
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Emoji picker
+        emojiToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            emojiPickerWrapper.classList.toggle('active');
+        });
+
+        document.addEventListener('click', () => {
+            emojiPickerWrapper.classList.remove('active');
+        });
+
+        emojiPicker.addEventListener('emoji-click', (event) => {
+            const emoji = event.detail.unicode;
+            messageInput.value += emoji;
+            messageInput.focus();
+        });
+
+        emojiPickerWrapper.addEventListener('click', (e) => e.stopPropagation());
+
+        // Romance emoji logic
+        const romanceEnabled = localStorage.getItem('romanceEmojiEnabled') === 'true';
+        const romanceEmojis = ["😘","😍","💋","❤️‍🔥","💕","💞","💓","💗","💖","💘","💝","💑","💏","🥰","😚","😙","😻","💌","💟","💐","💍"];
+
+        function setEmojiMode(mode) {
+            if (mode === 'romance' && !romanceEnabled) {
+                alert('Enable the Romance Emoji Pack on the welcome page to access these emojis.');
+                return;
+            }
+            const showRomance = mode === 'romance';
+            emojiAllBtn.classList.toggle('active', !showRomance);
+            emojiRomanceBtn.classList.toggle('active', showRomance);
+            romancePanel.classList.toggle('active', showRomance);
+            emojiPicker.style.display = showRomance ? 'none' : 'block';
+        }
+
+        function renderRomanceEmojis() {
+            if (!romanceEnabled) {
+                romanceLocked.style.display = 'block';
+                romanceGrid.innerHTML = '';
+                emojiRomanceBtn.classList.add('disabled');
+                return;
+            }
+            romanceLocked.style.display = 'none';
+            emojiRomanceBtn.classList.remove('disabled');
+            romanceGrid.innerHTML = '';
+            romanceEmojis.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'romance-emoji';
+                btn.textContent = emoji;
+                btn.addEventListener('click', () => {
+                    messageInput.value += emoji;
+                    messageInput.focus();
+                });
+                romanceGrid.appendChild(btn);
+            });
+        }
+
+        emojiAllBtn.addEventListener('click', () => setEmojiMode('all'));
+        emojiRomanceBtn.addEventListener('click', () => setEmojiMode('romance'));
+        renderRomanceEmojis();
+        setEmojiMode('all');
+
+        // Display message
+        function displayMessage(user, text, timestamp, isOwn) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+            
+            const time = new Date(timestamp);
+            const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            messageDiv.innerHTML = `
+                <div class="message-header">${isOwn ? '<i class="bi bi-person-check"></i> You' : '<i class="bi bi-person"></i> ' + escapeHtml(user)}</div>
+                <div class="message-text">${escapeHtml(text)}</div>
+                <div class="message-time">${timeStr}</div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Display system message
+        function displaySystemMessage(text) {
+            const systemDiv = document.createElement('div');
+            systemDiv.className = 'system-message';
+            systemDiv.innerHTML = `<i class="bi bi-info-circle"></i> ${escapeHtml(text)}`;
+            messagesContainer.appendChild(systemDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Update users list
+        function updateUsersList(users) {
+            usersList.innerHTML = '';
+            if (users.length === 0) {
+                usersList.innerHTML = '<p class="text-muted text-center">No users online</p>';
+                return;
+            }
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = `user-badge ${user === userName ? 'you' : ''}`;
+                userDiv.innerHTML = `
+                    <i class="bi bi-person-circle"></i>
+                    <span>${user === userName ? 'You' : escapeHtml(user)}</span>
+                `;
+                usersList.appendChild(userDiv);
+            });
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
