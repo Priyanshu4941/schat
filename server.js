@@ -410,6 +410,8 @@ app.post('/send-otp', async (req, res) => {
   try {
     const { name, email } = req.body;
 
+    console.log('📧 OTP request received for:', email);
+
     if (!name || !email) {
       return res.render('register', { 
         error: 'Please fill in all fields', 
@@ -432,6 +434,7 @@ app.post('/send-otp', async (req, res) => {
 
     // Generate OTP
     const otp = generateOTP();
+    console.log('🔢 Generated OTP:', otp, 'for', email);
 
     // Delete any existing OTP for this email
     await OTP.deleteMany({ email: email.toLowerCase() });
@@ -443,18 +446,23 @@ app.post('/send-otp', async (req, res) => {
       expiresAt: new Date(Date.now() + 120 * 1000) // 120 seconds (2 minutes)
     });
     await otpRecord.save();
+    console.log('💾 OTP saved to database');
 
     // Send OTP via email
+    console.log('📤 Attempting to send email...');
     const emailResult = await sendOTPEmail(email, otp);
     
     if (!emailResult.success) {
+      console.error('❌ Email sending failed:', emailResult.error);
       return res.render('register', { 
-        error: 'Failed to send OTP. Please try again.', 
+        error: 'Failed to send OTP. Please check your email address and try again.', 
         success: null,
         name: name,
         email: email
       });
     }
+
+    console.log('✅ OTP email sent successfully to:', email);
 
     // Store name and email in session (using query params for simplicity)
     res.render('verify-otp', { 
@@ -463,7 +471,7 @@ app.post('/send-otp', async (req, res) => {
       error: null 
     });
   } catch (error) {
-    console.error('Error sending OTP:', error);
+    console.error('❌ Error in send-otp route:', error);
     res.render('register', { 
       error: 'An error occurred. Please try again.', 
       success: null,
