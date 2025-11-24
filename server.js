@@ -62,7 +62,19 @@ const OTP = require('./models/OTP');
 const Room = require('./models/Room');
 const LoginAttempt = require('./models/LoginAttempt');
 const Message = require('./models/Message');
-const { sendOTPEmail } = require('./config/email');
+// Choose email provider: 'gmail' or 'sendgrid'
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'gmail';
+
+let sendOTPEmail;
+if (EMAIL_PROVIDER === 'sendgrid' && process.env.SENDGRID_API_KEY) {
+  console.log('📧 Using SendGrid for emails');
+  const emailModule = require('./config/email-sendgrid');
+  sendOTPEmail = emailModule.sendOTPEmail;
+} else {
+  console.log('📧 Using Gmail SMTP for emails');
+  const emailModule = require('./config/email');
+  sendOTPEmail = emailModule.sendOTPEmail;
+}
 
 // Store active users in rooms
 const activeUsers = new Map(); // roomId -> Set of userNames
