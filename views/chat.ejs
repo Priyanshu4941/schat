@@ -138,7 +138,7 @@
             border-color: #667eea;
             box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
-        .send-btn {
+        .send-btn, .attach-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             border-radius: 15px;
@@ -147,9 +147,77 @@
             font-weight: 600;
             transition: all 0.3s ease;
         }
-        .send-btn:hover {
+        .send-btn:hover, .attach-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        .attach-btn {
+            padding: 12px 20px;
+            cursor: pointer;
+        }
+        .file-input {
+            display: none;
+        }
+        .file-preview {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        .file-attachment {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 8px;
+            display: inline-block;
+            max-width: 100%;
+        }
+        .file-attachment img, .file-attachment video {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            display: block;
+        }
+        .file-attachment .file-icon {
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .file-attachment .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-attachment .file-name {
+            font-weight: 600;
+            word-break: break-word;
+        }
+        .file-attachment .file-size {
+            font-size: 12px;
+            color: #666;
+        }
+        .download-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .download-btn:hover {
+            background: #764ba2;
+            color: white;
+        }
+        .uploading-indicator {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 10px;
+            margin-bottom: 10px;
         }
         .emoji-btn {
             background: #fff;
@@ -297,6 +365,10 @@
                         </div>
                     </div>
 
+                    <div class="uploading-indicator" id="uploadingIndicator">
+                        <i class="bi bi-hourglass-split"></i> Uploading file...
+                    </div>
+
                     <div class="chat-input-area">
                         <div class="emoji-picker-wrapper" id="emojiPickerWrapper">
                             <div class="emoji-toolbar" id="emojiToolbar">
@@ -311,6 +383,10 @@
                             </div>
                             <emoji-picker id="emojiPicker"></emoji-picker>
                         </div>
+                        <input type="file" id="fileInput" class="file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt">
+                        <button type="button" class="attach-btn" id="attachBtn" title="Attach file">
+                            <i class="bi bi-paperclip"></i>
+                        </button>
                         <button type="button" class="emoji-btn" id="emojiToggle" title="Add emoji">
                             😀
                         </button>
@@ -348,6 +424,9 @@
         const romancePanel = document.getElementById('romancePanel');
         const romanceGrid = document.getElementById('romanceGrid');
         const romanceLocked = document.getElementById('romanceLocked');
+        const attachBtn = document.getElementById('attachBtn');
+        const fileInput = document.getElementById('fileInput');
+        const uploadingIndicator = document.getElementById('uploadingIndicator');
 
         // Join room
         socket.emit('join-room', { roomId: roomId, userName: userName });
@@ -355,7 +434,7 @@
         // Display existing messages
         const existingMessages = JSON.parse(`<%- JSON.stringify(messages) %>`);
         existingMessages.forEach(msg => {
-            displayMessage(msg.userName, msg.message, msg.createdAt, msg.userName === userName);
+            displayMessage(msg.userName, msg.message, msg.createdAt, msg.userName === userName, msg.fileData, msg.fileName, msg.fileType, msg.fileSize, msg.fileMimeType);
         });
 
         // Display active users
@@ -364,7 +443,7 @@
 
         // Listen for new messages
         socket.on('receive-message', (data) => {
-            displayMessage(data.userName, data.message, data.timestamp, data.userName === userName);
+            displayMessage(data.userName, data.message, data.timestamp, data.userName === userName, data.fileData, data.fileName, data.fileType, data.fileSize, data.fileMimeType);
         });
 
         // Listen for user joined/left
@@ -398,6 +477,53 @@
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendMessage();
+            }
+        });
+
+        // File attachment
+        attachBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Check file size (50MB limit)
+            if (file.size > 50 * 1024 * 1024) {
+                alert('File size must be less than 50MB');
+                fileInput.value = '';
+                return;
+            }
+
+            // Show uploading indicator
+            uploadingIndicator.style.display = 'block';
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('roomId', roomId);
+            formData.append('userName', userName);
+
+            try {
+                const response = await fetch('/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log('File uploaded successfully');
+                } else {
+                    alert('Failed to upload file: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file');
+            } finally {
+                uploadingIndicator.style.display = 'none';
+                fileInput.value = '';
             }
         });
 
@@ -464,21 +590,91 @@
         setEmojiMode('all');
 
         // Display message
-        function displayMessage(user, text, timestamp, isOwn) {
+        function displayMessage(user, text, timestamp, isOwn, fileData, fileName, fileType, fileSize, fileMimeType) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
             
             const time = new Date(timestamp);
             const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
+            let messageContent = '';
+            
+            // If there's a file attachment
+            if (fileData && fileType) {
+                // Create data URL from base64
+                const dataUrl = `data:${fileMimeType};base64,${fileData}`;
+                
+                if (fileType === 'image') {
+                    messageContent = `
+                        <div class="file-attachment">
+                            <img src="${dataUrl}" alt="${escapeHtml(fileName)}" class="file-preview">
+                            <div class="file-name">${escapeHtml(fileName)}</div>
+                            <a href="${dataUrl}" download="${escapeHtml(fileName)}" class="download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    `;
+                } else if (fileType === 'video') {
+                    messageContent = `
+                        <div class="file-attachment">
+                            <video controls class="file-preview">
+                                <source src="${dataUrl}" type="${escapeHtml(fileMimeType)}">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div class="file-name">${escapeHtml(fileName)}</div>
+                            <a href="${dataUrl}" download="${escapeHtml(fileName)}" class="download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    `;
+                } else if (fileType === 'document') {
+                    const fileSizeStr = formatFileSize(fileSize);
+                    const fileIcon = getFileIcon(fileName);
+                    messageContent = `
+                        <div class="file-attachment">
+                            <div class="file-icon">${fileIcon}</div>
+                            <div class="file-info">
+                                <div>
+                                    <div class="file-name">${escapeHtml(fileName)}</div>
+                                    <div class="file-size">${fileSizeStr}</div>
+                                </div>
+                            </div>
+                            <a href="${dataUrl}" download="${escapeHtml(fileName)}" class="download-btn">
+                                <i class="bi bi-download"></i> Download
+                            </a>
+                        </div>
+                    `;
+                }
+            } else if (text) {
+                messageContent = `<div class="message-text">${escapeHtml(text)}</div>`;
+            }
+            
             messageDiv.innerHTML = `
                 <div class="message-header">${isOwn ? '<i class="bi bi-person-check"></i> You' : '<i class="bi bi-person"></i> ' + escapeHtml(user)}</div>
-                <div class="message-text">${escapeHtml(text)}</div>
+                ${messageContent}
                 <div class="message-time">${timeStr}</div>
             `;
             
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (!bytes) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Get file icon based on extension
+        function getFileIcon(fileName) {
+            const ext = fileName.split('.').pop().toLowerCase();
+            if (ext === 'pdf') return '📄';
+            if (ext === 'doc' || ext === 'docx') return '📝';
+            if (ext === 'txt') return '📃';
+            return '📎';
         }
 
         // Display system message

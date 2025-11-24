@@ -5,6 +5,8 @@ const socketIo = require('socket.io');
 const mongoose = require('mongoose');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +20,32 @@ mongoose.connect(MONGODB_URI, {
 })
 .then(() => console.log('Connected to MongoDB'))
 .catch(err => console.error('MongoDB connection error:', err));
+
+// Configure multer to store files in memory (for MongoDB storage)
+const storage = multer.memoryStorage();
+
+const fileFilter = (req, file, cb) => {
+  // Allowed file types
+  const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|pdf|doc|docx|txt/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = allowedTypes.test(file.mimetype);
+
+  if (mimetype && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only images, videos, and documents are allowed.'));
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 16 * 1024 * 1024 // 16MB limit (MongoDB document size limit)
+  },
+  fileFilter: fileFilter
+});
+
+console.log('✅ File storage configured - Files will be stored in MongoDB');
 
 // Middleware
 app.use(express.json());
@@ -314,6 +342,69 @@ app.get('/chat', async (req, res) => {
   });
 });
 
+// File upload route - Store file in MongoDB as base64
+app.post('/upload-file', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+
+    const { roomId, userName } = req.body;
+    const normalizedRoomId = roomId.toLowerCase().trim();
+
+    // Determine file type
+    let fileType = 'document';
+    if (req.file.mimetype.startsWith('image/')) {
+      fileType = 'image';
+    } else if (req.file.mimetype.startsWith('video/')) {
+      fileType = 'video';
+    }
+
+    // Convert file buffer to base64 string
+    const fileBase64 = req.file.buffer.toString('base64');
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const fileMimeType = req.file.mimetype;
+
+    // Save message with file data to database
+    const newMessage = new Message({
+      roomId: normalizedRoomId,
+      userName: userName,
+      message: '',
+      fileData: fileBase64,
+      fileName: fileName,
+      fileType: fileType,
+      fileMimeType: fileMimeType,
+      fileSize: fileSize,
+      createdAt: new Date()
+    });
+    await newMessage.save();
+
+    // Broadcast to all in the room (send file data)
+    io.to(normalizedRoomId).emit('receive-message', {
+      userName: userName,
+      message: '',
+      fileData: fileBase64,
+      fileName: fileName,
+      fileType: fileType,
+      fileMimeType: fileMimeType,
+      fileSize: fileSize,
+      timestamp: newMessage.createdAt
+    });
+
+    res.json({ 
+      success: true,
+      fileData: fileBase64,
+      fileName: fileName,
+      fileType: fileType,
+      fileMimeType: fileMimeType
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({ success: false, error: 'Failed to upload file' });
+  }
+});
+
 // Send OTP
 app.post('/send-otp', async (req, res) => {
   try {
@@ -545,6 +636,7 @@ io.on('connection', (socket) => {
         roomId: normalizedRoomId,
         userName: userName,
         message: message,
+        fileType: 'text',
         createdAt: new Date()
       });
       await newMessage.save();
@@ -553,6 +645,7 @@ io.on('connection', (socket) => {
       io.to(normalizedRoomId).emit('receive-message', {
         userName: userName,
         message: message,
+        fileType: 'text',
         timestamp: newMessage.createdAt
       });
 
