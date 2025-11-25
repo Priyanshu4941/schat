@@ -71,8 +71,8 @@ if (EMAIL_PROVIDER === 'sendgrid' && process.env.SENDGRID_API_KEY) {
   const emailModule = require('./config/email-sendgrid');
   sendOTPEmail = emailModule.sendOTPEmail;
 } else {
-  console.log('📧 Using Gmail SMTP for emails');
-  const emailModule = require('./config/email');
+  console.log('📧 Using Gmail (simple) for emails');
+  const emailModule = require('./config/email-simple');
   sendOTPEmail = emailModule.sendOTPEmail;
 }
 
