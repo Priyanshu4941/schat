@@ -84,6 +84,31 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+// Test email endpoint (for debugging)
+app.get('/test-email', async (req, res) => {
+  const testEmail = req.query.email || 'test@example.com';
+  const testOTP = '123456';
+  
+  console.log('🧪 Testing email configuration...');
+  console.log('Environment variables:', {
+    EMAILID: process.env.EMAILID,
+    PASSWORD: process.env.PASSWORD ? 'Set (hidden)' : 'NOT SET',
+    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'gmail',
+    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? 'Set (hidden)' : 'NOT SET'
+  });
+  
+  const result = await sendOTPEmail(testEmail, testOTP);
+  
+  res.json({
+    success: result.success,
+    error: result.error || null,
+    message: result.success ? 'Email sent successfully!' : 'Email failed to send',
+    testEmail: testEmail,
+    testOTP: testOTP,
+    provider: EMAIL_PROVIDER
+  });
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.render('register', { error: null, success: null });
@@ -464,13 +489,18 @@ app.post('/send-otp', async (req, res) => {
     console.log('📤 Attempting to send email...');
     const emailResult = await sendOTPEmail(email, otp);
     
+    // TEMPORARY: Show OTP on screen if email fails (for testing/debugging)
     if (!emailResult.success) {
       console.error('❌ Email sending failed:', emailResult.error);
-      return res.render('register', { 
-        error: 'Failed to send OTP. Please check your email address and try again.', 
-        success: null,
+      console.log('⚠️  TEMPORARY: Showing OTP on screen for testing');
+      
+      // Still allow user to proceed with OTP verification
+      // In production, you should fix the email issue
+      return res.render('verify-otp', { 
+        email: email, 
         name: name,
-        email: email
+        error: `Email service unavailable. Your OTP is: ${otp} (This is temporary - please setup SendGrid)`,
+        showOTP: otp // Pass OTP to display on screen
       });
     }
 
@@ -480,7 +510,8 @@ app.post('/send-otp', async (req, res) => {
     res.render('verify-otp', { 
       email: email, 
       name: name,
-      error: null 
+      error: null,
+      showOTP: null
     });
   } catch (error) {
     console.error('❌ Error in send-otp route:', error);
