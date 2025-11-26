@@ -44,6 +44,15 @@ const messageSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
     index: true
+  },
+  // Read receipts
+  delivered: {
+    type: Boolean,
+    default: true
+  },
+  readBy: {
+    type: [String],
+    default: []
   }
 });
 

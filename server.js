@@ -58,8 +58,9 @@ app.set('views', path.join(__dirname, 'views'));
 const Room = require('./models/Room');
 const Message = require('./models/Message');
 
-// Store active users in rooms
+// Store active users in rooms with online status
 const activeUsers = new Map(); // roomId -> Set of userNames
+const userStatus = new Map(); // userName -> { online: boolean, lastSeen: Date, socketId: string, roomId: string }
 
 // Routes - Main login page
 app.get('/', (req, res) => {
@@ -240,6 +241,23 @@ io.on('connection', (socket) => {
     }
     activeUsers.get(normalizedRoomId).add(userName);
 
+    // Update user status to online
+    userStatus.set(userName, {
+      online: true,
+      lastSeen: new Date(),
+      socketId: socket.id,
+      roomId: normalizedRoomId
+    });
+
+    // Mark all messages in room as read by this user
+    await Message.updateMany(
+      { 
+        roomId: normalizedRoomId,
+        userName: { $ne: userName }
+      },
+      { $addToSet: { readBy: userName } }
+    );
+
     // Notify others in the room
     socket.to(normalizedRoomId).emit('user-joined', {
       userName: userName,
@@ -247,12 +265,26 @@ io.on('connection', (socket) => {
       timestamp: new Date()
     });
 
-    // Send current active users to the new user
+    // Broadcast online status
+    io.to(normalizedRoomId).emit('user-status-change', {
+      userName: userName,
+      online: true
+    });
+
+    // Send current active users with status to the new user
     const users = Array.from(activeUsers.get(normalizedRoomId));
-    socket.emit('active-users', users);
+    const usersWithStatus = users.map(user => ({
+      userName: user,
+      online: userStatus.get(user)?.online || false,
+      lastSeen: userStatus.get(user)?.lastSeen || null
+    }));
+    socket.emit('active-users', usersWithStatus);
 
     // Broadcast updated user list to all in room
-    io.to(normalizedRoomId).emit('active-users', users);
+    io.to(normalizedRoomId).emit('active-users', usersWithStatus);
+
+    // Notify sender about read receipts
+    socket.to(normalizedRoomId).emit('messages-read', { reader: userName });
 
     console.log(`${userName} joined room: ${normalizedRoomId}`);
   });
@@ -262,21 +294,26 @@ io.on('connection', (socket) => {
     try {
       const normalizedRoomId = roomId.toLowerCase().trim();
 
-      // Save message to database (plain text)
+      // Save message to database
       const newMessage = new Message({
         roomId: normalizedRoomId,
         userName: userName,
         message: message,
         fileType: 'text',
+        delivered: true,
+        readBy: [userName], // Sender has read their own message
         createdAt: new Date()
       });
       await newMessage.save();
 
-      // Broadcast to all in the room (real-time)
+      // Broadcast to all in the room
       io.to(normalizedRoomId).emit('receive-message', {
+        messageId: newMessage._id,
         userName: userName,
         message: message,
         fileType: 'text',
+        delivered: true,
+        readBy: [userName],
         timestamp: newMessage.createdAt
       });
 
@@ -287,10 +324,40 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle message read
+  socket.on('mark-messages-read', async ({ roomId, userName }) => {
+    try {
+      const normalizedRoomId = roomId.toLowerCase().trim();
+      
+      // Update all unread messages
+      await Message.updateMany(
+        { 
+          roomId: normalizedRoomId,
+          userName: { $ne: userName },
+          readBy: { $ne: userName }
+        },
+        { $addToSet: { readBy: userName } }
+      );
+
+      // Notify all users in room about read status
+      io.to(normalizedRoomId).emit('messages-read', { reader: userName });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     if (socket.roomId && socket.userName) {
       const normalizedRoomId = socket.roomId;
+
+      // Update user status to offline
+      userStatus.set(socket.userName, {
+        online: false,
+        lastSeen: new Date(),
+        socketId: null,
+        roomId: normalizedRoomId
+      });
 
       // Remove user from active users
       if (activeUsers.has(normalizedRoomId)) {
@@ -300,11 +367,23 @@ io.on('connection', (socket) => {
         if (activeUsers.get(normalizedRoomId).size === 0) {
           activeUsers.delete(normalizedRoomId);
         } else {
-          // Broadcast updated user list
+          // Broadcast updated user list with status
           const users = Array.from(activeUsers.get(normalizedRoomId));
-          io.to(normalizedRoomId).emit('active-users', users);
+          const usersWithStatus = users.map(user => ({
+            userName: user,
+            online: userStatus.get(user)?.online || false,
+            lastSeen: userStatus.get(user)?.lastSeen || null
+          }));
+          io.to(normalizedRoomId).emit('active-users', usersWithStatus);
         }
       }
+
+      // Broadcast offline status
+      io.to(normalizedRoomId).emit('user-status-change', {
+        userName: socket.userName,
+        online: false,
+        lastSeen: new Date()
+      });
 
       // Notify others in the room
       socket.to(normalizedRoomId).emit('user-left', {

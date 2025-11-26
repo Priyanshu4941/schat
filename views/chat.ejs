@@ -177,6 +177,41 @@
             gap: 3px;
         }
         
+        /* Read receipts (WhatsApp style) */
+        .read-receipt {
+            font-size: 14px;
+            margin-left: 4px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .read-receipt.delivered {
+            color: #8696a0;
+        }
+        .read-receipt.read {
+            color: #53bdeb;
+        }
+        
+        /* Online status indicator */
+        .online-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #25d366;
+            display: inline-block;
+            margin-left: 6px;
+            border: 2px solid white;
+        }
+        .online-indicator.offline {
+            background: #8696a0;
+        }
+        
+        /* Last seen text */
+        .last-seen {
+            font-size: 11px;
+            color: #667781;
+            margin-left: 6px;
+        }
+        
         .system-message {
             text-align: center;
             color: #667781;
@@ -775,10 +810,13 @@
         // Join room
         socket.emit('join-room', { roomId: roomId, userName: userName });
 
+        // Mark messages as read when user enters
+        socket.emit('mark-messages-read', { roomId: roomId, userName: userName });
+
         // Display existing messages
         const existingMessages = JSON.parse(`<%- JSON.stringify(messages) %>`);
         existingMessages.forEach(msg => {
-            displayMessage(msg.userName, msg.message, msg.createdAt, msg.userName === userName, msg.fileData, msg.fileName, msg.fileType, msg.fileSize, msg.fileMimeType);
+            displayMessage(msg.userName, msg.message, msg.createdAt, msg.userName === userName, msg.fileData, msg.fileName, msg.fileType, msg.fileSize, msg.fileMimeType, msg._id, msg.readBy);
         });
 
         // Display active users
@@ -787,7 +825,29 @@
 
         // Listen for new messages
         socket.on('receive-message', (data) => {
-            displayMessage(data.userName, data.message, data.timestamp, data.userName === userName, data.fileData, data.fileName, data.fileType, data.fileSize, data.fileMimeType);
+            displayMessage(data.userName, data.message, data.timestamp, data.userName === userName, data.fileData, data.fileName, data.fileType, data.fileSize, data.fileMimeType, data.messageId, data.readBy);
+            
+            // Mark as read if not own message
+            if (data.userName !== userName) {
+                socket.emit('mark-messages-read', { roomId: roomId, userName: userName });
+            }
+        });
+
+        // Listen for messages read
+        socket.on('messages-read', (data) => {
+            // Update all own messages to show blue ticks
+            document.querySelectorAll('.message.own').forEach(msgDiv => {
+                const receipt = msgDiv.querySelector('.read-receipt');
+                if (receipt) {
+                    receipt.classList.remove('delivered');
+                    receipt.classList.add('read');
+                }
+            });
+        });
+
+        // Listen for user status changes
+        socket.on('user-status-change', (data) => {
+            updateUserStatus(data.userName, data.online, data.lastSeen);
         });
 
         // Listen for user joined/left
@@ -1107,9 +1167,12 @@
         renderStickers('fun');
 
         // Display message
-        function displayMessage(user, text, timestamp, isOwn, fileData, fileName, fileType, fileSize, fileMimeType) {
+        function displayMessage(user, text, timestamp, isOwn, fileData, fileName, fileType, fileSize, fileMimeType, messageId, readBy) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+            if (messageId) {
+                messageDiv.dataset.messageId = messageId;
+            }
             
             const time = new Date(timestamp);
             const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1172,10 +1235,17 @@
                 }
             }
             
+            // Read receipt (only for own messages)
+            let readReceipt = '';
+            if (isOwn) {
+                const isRead = readBy && readBy.length > 1; // More than just sender
+                readReceipt = `<span class="read-receipt ${isRead ? 'read' : 'delivered'}">✓✓</span>`;
+            }
+            
             messageDiv.innerHTML = `
                 <div class="message-header">${isOwn ? '<i class="bi bi-person-check"></i> You' : '<i class="bi bi-person"></i> ' + escapeHtml(user)}</div>
                 ${messageContent}
-                <div class="message-time">${timeStr}</div>
+                <div class="message-time">${timeStr}${readReceipt}</div>
             `;
             
             messagesContainer.appendChild(messageDiv);
@@ -1218,13 +1288,74 @@
             }
             users.forEach(user => {
                 const userDiv = document.createElement('div');
-                userDiv.className = `user-badge ${user === userName ? 'you' : ''}`;
+                const isCurrentUser = (typeof user === 'string' ? user : user.userName) === userName;
+                userDiv.className = `user-badge ${isCurrentUser ? 'you' : ''}`;
+                userDiv.dataset.username = typeof user === 'string' ? user : user.userName;
+                
+                let statusHtml = '';
+                if (typeof user === 'object') {
+                    const online = user.online;
+                    const lastSeen = user.lastSeen;
+                    
+                    if (online) {
+                        statusHtml = '<span class="online-indicator"></span>';
+                    } else if (lastSeen) {
+                        const lastSeenText = getLastSeenText(lastSeen);
+                        statusHtml = `<span class="last-seen">${lastSeenText}</span>`;
+                    }
+                }
+                
+                const displayName = typeof user === 'string' ? user : user.userName;
                 userDiv.innerHTML = `
                     <i class="bi bi-person-circle"></i>
-                    <span>${user === userName ? 'You' : escapeHtml(user)}</span>
+                    <span>${isCurrentUser ? 'You' : escapeHtml(displayName)}</span>
+                    ${statusHtml}
                 `;
                 usersList.appendChild(userDiv);
             });
+        }
+
+        // Update individual user status
+        function updateUserStatus(username, online, lastSeen) {
+            const userDiv = document.querySelector(`[data-username="${username}"]`);
+            if (userDiv) {
+                const existingStatus = userDiv.querySelector('.online-indicator, .last-seen');
+                if (existingStatus) {
+                    existingStatus.remove();
+                }
+                
+                let statusHtml = '';
+                if (online) {
+                    statusHtml = '<span class="online-indicator"></span>';
+                } else if (lastSeen) {
+                    const lastSeenText = getLastSeenText(lastSeen);
+                    statusHtml = `<span class="last-seen">${lastSeenText}</span>`;
+                }
+                
+                if (statusHtml) {
+                    userDiv.insertAdjacentHTML('beforeend', statusHtml);
+                }
+            }
+        }
+
+        // Get last seen text (WhatsApp style)
+        function getLastSeenText(lastSeen) {
+            const now = new Date();
+            const lastSeenDate = new Date(lastSeen);
+            const diffMs = now - lastSeenDate;
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            
+            const diffDays = Math.floor(diffHours / 24);
+            if (diffDays === 1) return 'yesterday';
+            if (diffDays < 7) return `${diffDays}d ago`;
+            
+            return lastSeenDate.toLocaleDateString();
         }
 
         // Escape HTML to prevent XSS
