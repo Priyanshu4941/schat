@@ -9,118 +9,184 @@
     <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #0a0e27;
+            min-height: 100vh;
+            padding: 0;
+            margin: 0;
+        }
+        
         .chat-card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 30px;
-            height: calc(100vh - 40px);
+            background: #fff;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            max-width: 100%;
+            margin: 0 auto;
         }
+        
+        /* WhatsApp-style Header */
         .chat-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #075e54;
             color: white;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            min-height: 60px;
         }
+        
+        .chat-header h4 {
+            font-size: 16px;
+            font-weight: 500;
+            margin: 0;
+        }
+        
+        .chat-header small {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .chat-header .btn-light {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: 5px;
+        }
+        
+        .chat-header .btn-light:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
         .chat-body {
             flex: 1;
             display: flex;
-            gap: 20px;
             overflow: hidden;
-            margin-bottom: 20px;
+            background: #e5ddd5;
         }
+        
+        /* WhatsApp-style Messages Container */
         .messages-container {
             flex: 1;
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23e5ddd5" width="100" height="100"/><path d="M0 0 L50 50 L0 100 L50 100 L100 50 L50 0 Z" fill="%23d9d0c7" opacity="0.05"/></svg>');
+            background-size: 400px 400px;
+            padding: 12px 8%;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 2px;
         }
+        
         .users-sidebar {
-            width: 250px;
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
+            width: 280px;
+            background: #fff;
+            border-left: 1px solid #e0e0e0;
+            padding: 16px;
             overflow-y: auto;
+            display: none;
         }
+        
         .users-sidebar h5 {
-            color: #667eea;
-            font-weight: 700;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e0e0e0;
+            color: #075e54;
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e0e0e0;
         }
+        
         .user-badge {
-            background: white;
-            padding: 10px 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
+            background: #f0f2f5;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
             gap: 10px;
-            transition: all 0.3s ease;
+            font-size: 14px;
         }
-        .user-badge:hover {
-            transform: translateX(5px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-        }
+        
         .user-badge.you {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #d9fdd3;
+            font-weight: 500;
         }
+        
+        /* WhatsApp-style Message Bubbles */
         .message {
-            padding: 12px 15px;
-            border-radius: 15px;
-            margin-bottom: 10px;
-            animation: slideIn 0.3s ease-out;
-            max-width: 75%;
+            padding: 6px 7px 8px 9px;
+            border-radius: 7.5px;
+            margin-bottom: 2px;
+            animation: slideIn 0.15s ease-out;
+            max-width: 65%;
+            min-width: 80px;
             word-wrap: break-word;
+            position: relative;
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+            align-self: flex-start;
         }
+        
         .message.own {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #d9fdd3;
+            color: #000;
+            align-self: flex-end;
             margin-left: auto;
         }
+        
         .message.other {
-            background: white;
-            color: #333;
-            border: 1px solid #e0e0e0;
+            background: #fff;
+            color: #000;
         }
+        
         .message-header {
-            font-weight: 600;
-            font-size: 13px;
-            margin-bottom: 5px;
-            opacity: 0.9;
+            font-weight: 500;
+            font-size: 12.8px;
+            margin-bottom: 4px;
+            color: #075e54;
         }
+        
+        .message.own .message-header {
+            color: #06cf9c;
+        }
+        
         .message-text {
-            font-size: 15px;
-            line-height: 1.5;
+            font-size: 14.2px;
+            line-height: 19px;
+            color: #111;
+            margin: 0;
+            padding-right: 48px;
         }
+        
         .message-time {
             font-size: 11px;
-            opacity: 0.7;
-            margin-top: 5px;
+            color: rgba(0,0,0,0.45);
+            position: absolute;
+            bottom: 4px;
+            right: 7px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
         }
+        
         .system-message {
             text-align: center;
-            color: #999;
-            font-size: 12px;
-            font-style: italic;
-            margin: 10px 0;
-            padding: 8px;
-            background: #fff3cd;
-            border-radius: 10px;
+            color: #667781;
+            font-size: 12.5px;
+            margin: 12px auto;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 7.5px;
+            max-width: fit-content;
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
         }
         .chat-input-area {
             display: flex;
@@ -219,7 +285,7 @@
             border-radius: 10px;
             margin-bottom: 10px;
         }
-        .emoji-btn {
+        .emoji-btn, .sticker-btn {
             background: #fff;
             border: 2px solid #e0e0e0;
             border-radius: 15px;
@@ -231,40 +297,240 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .emoji-btn:hover {
+        .emoji-btn:hover, .sticker-btn:hover {
             border-color: #667eea;
             color: #667eea;
         }
-        .emoji-picker-wrapper {
+        
+        /* Sticker Picker Styles */
+        .sticker-picker-wrapper {
             position: absolute;
             right: 140px;
-            bottom: 60px;
-            z-index: 10;
+            bottom: 70px;
+            z-index: 999;
             display: none;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+            width: 420px;
+            max-height: 500px;
+            overflow: hidden;
+        }
+        .sticker-picker-wrapper.active {
+            display: flex;
+            flex-direction: column;
+        }
+        .sticker-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 15px 18px;
+            border-bottom: 3px solid #e0e0e0;
+            overflow-x: auto;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(102, 126, 234, 0.4) transparent;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .sticker-tabs::-webkit-scrollbar {
+            height: 8px;
+        }
+        .sticker-tabs::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        .sticker-tabs::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+        }
+        .sticker-tabs::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.7);
+        }
+        .sticker-tab {
+            border: 2px solid #d0d0d0;
+            border-radius: 15px;
+            padding: 12px 22px;
+            font-weight: 700;
+            font-size: 14px;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: fit-content;
+        }
+        .sticker-tab:hover {
+            background: #f0f0ff;
+            border-color: #667eea;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35);
+        }
+        .sticker-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            transform: translateY(-2px) scale(1.05);
+        }
+        .sticker-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(102, 126, 234, 0.4) transparent;
+        }
+        .sticker-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .sticker-content::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        .sticker-content::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+        }
+        .sticker-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.7);
+        }
+        .sticker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        .sticker-item {
+            font-size: 60px;
+            padding: 12px;
+            border-radius: 15px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            background: #f9f9f9;
+        }
+        .sticker-item:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+            transform: scale(1.1);
+        }
+        .sticker-item:active {
+            transform: scale(0.95);
+        }
+        .sticker-locked {
+            padding: 30px;
+            text-align: center;
+            color: #d6336c;
+        }
+        .sticker-locked h6 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .sticker-locked button {
+            margin-top: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .sticker-message {
+            font-size: 80px;
+            line-height: 1;
+            padding: 10px;
+        }
+        .emoji-picker-wrapper {
+            position: absolute;
+            right: 70px;
+            bottom: 70px;
+            z-index: 1000;
+            display: none;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+            padding: 0;
+            overflow: hidden;
+            max-width: 380px;
+            max-height: 450px;
         }
         .emoji-picker-wrapper.active {
-            display: block;
+            display: flex;
+            flex-direction: column;
         }
         emoji-picker {
             --emoji-font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Twemoji Mozilla';
-            border-radius: 16px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-            max-width: 320px;
+            border-radius: 0;
+            box-shadow: none;
+            max-width: 100%;
+            height: 100%;
+            overflow-y: auto;
+        }
+        /* Custom scrollbar for emoji picker */
+        emoji-picker::-webkit-scrollbar {
+            width: 8px;
+        }
+        emoji-picker::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        emoji-picker::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+        }
+        emoji-picker::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.7);
         }
         .emoji-toolbar {
             display: flex;
             gap: 10px;
-            margin-bottom: 10px;
+            padding: 15px 18px;
+            border-bottom: 3px solid #e0e0e0;
+            overflow-x: auto;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(102, 126, 234, 0.4) transparent;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+        }
+        .emoji-toolbar::-webkit-scrollbar {
+            height: 8px;
+        }
+        .emoji-toolbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        .emoji-toolbar::-webkit-scrollbar-thumb {
+            background: rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+        }
+        .emoji-toolbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(102, 126, 234, 0.7);
         }
         .emoji-toolbar button {
-            border: none;
-            border-radius: 20px;
-            padding: 6px 16px;
-            font-weight: 600;
-            background: #f1f1f7;
-            color: #555;
+            border: 2px solid #d0d0d0;
+            border-radius: 15px;
+            padding: 12px 22px;
+            font-weight: 700;
+            font-size: 14px;
+            background: white;
+            color: #333;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+            flex-shrink: 0;
+            min-width: fit-content;
+        }
+        .emoji-toolbar button:hover {
+            background: #f0f0ff;
+            border-color: #667eea;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 18px rgba(102, 126, 234, 0.35);
         }
         .emoji-toolbar button.disabled {
             opacity: 0.5;
@@ -273,15 +539,32 @@
         .emoji-toolbar button.active {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.35);
+            border-color: transparent;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            transform: translateY(-2px) scale(1.05);
         }
         .romance-panel {
             display: none;
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-            max-width: 320px;
             padding: 15px;
+            overflow-y: auto;
+            max-height: 350px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(214, 51, 108, 0.4) transparent;
+        }
+        .romance-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .romance-panel::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        .romance-panel::-webkit-scrollbar-thumb {
+            background: rgba(214, 51, 108, 0.5);
+            border-radius: 10px;
+        }
+        .romance-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(214, 51, 108, 0.7);
         }
         .romance-panel.active {
             display: block;
@@ -289,22 +572,29 @@
         .romance-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
+            gap: 12px;
+            padding: 5px;
         }
         .romance-emoji {
-            font-size: 28px;
-            padding: 6px;
+            font-size: 32px;
+            padding: 10px;
             border-radius: 12px;
-            border: 1px solid transparent;
+            border: 2px solid transparent;
             cursor: pointer;
             transition: all 0.2s ease;
+            background: #fff;
+            text-align: center;
         }
         .romance-emoji:hover {
-            border-color: #ffc2d1;
+            border-color: #ff69b4;
             background: #fff0f5;
+            transform: scale(1.15);
+        }
+        .romance-emoji:active {
+            transform: scale(0.95);
         }
         .romance-locked {
-            padding: 10px;
+            padding: 30px 20px;
             text-align: center;
             color: #d6336c;
             font-size: 14px;
@@ -334,6 +624,40 @@
                 height: calc(100vh - 20px);
                 padding: 15px;
             }
+            .sticker-picker-wrapper {
+                right: 10px;
+                left: 10px;
+                width: auto;
+                max-height: 350px;
+            }
+            .emoji-picker-wrapper {
+                right: 10px;
+                left: 10px;
+                width: auto;
+            }
+            .sticker-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+            }
+            .sticker-item {
+                font-size: 45px;
+                padding: 8px;
+            }
+            .sticker-tabs {
+                gap: 6px;
+                padding: 10px 12px;
+            }
+            .sticker-tab {
+                padding: 10px 16px;
+                font-size: 12px;
+                min-width: auto;
+            }
+            .chat-input-area {
+                flex-wrap: wrap;
+            }
+            .emoji-btn, .sticker-btn, .attach-btn {
+                width: 48px;
+            }
         }
     </style>
 </head>
@@ -347,8 +671,8 @@
                             <h4 class="mb-1"><i class="bi bi-chat-dots"></i> <%= roomName %></h4>
                             <small class="opacity-75">Room ID: <strong><%= roomId %></strong></small>
                         </div>
-                        <a href="/welcome?user=<%= encodeURIComponent(userName) %>&email=<%= encodeURIComponent(userEmail) %>" class="btn btn-light btn-sm">
-                            <i class="bi bi-arrow-left"></i> Back
+                        <a href="/" class="btn btn-light btn-sm">
+                            <i class="bi bi-box-arrow-left"></i> Leave Room
                         </a>
                     </div>
 
@@ -383,9 +707,25 @@
                             </div>
                             <emoji-picker id="emojiPicker"></emoji-picker>
                         </div>
+                        <div class="sticker-picker-wrapper" id="stickerPickerWrapper">
+                            <div class="sticker-tabs" id="stickerTabs">
+                                <button class="sticker-tab active" data-pack="fun">😄 Fun</button>
+                                <button class="sticker-tab" data-pack="love">❤️ Love</button>
+                                <button class="sticker-tab" data-pack="flirty">😘 Flirty</button>
+                                <button class="sticker-tab" data-pack="kiss">💋 Kiss</button>
+                                <button class="sticker-tab" data-pack="romantic">🌹 Romantic</button>
+                                <button class="sticker-tab" data-pack="naughty">😈 Naughty</button>
+                            </div>
+                            <div class="sticker-content" id="stickerContent">
+                                <div class="sticker-grid" id="stickerGrid"></div>
+                            </div>
+                        </div>
                         <input type="file" id="fileInput" class="file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt">
                         <button type="button" class="attach-btn" id="attachBtn" title="Attach file">
                             <i class="bi bi-paperclip"></i>
+                        </button>
+                        <button type="button" class="sticker-btn" id="stickerToggle" title="Send sticker">
+                            🎭
                         </button>
                         <button type="button" class="emoji-btn" id="emojiToggle" title="Add emoji">
                             😀
@@ -427,6 +767,10 @@
         const attachBtn = document.getElementById('attachBtn');
         const fileInput = document.getElementById('fileInput');
         const uploadingIndicator = document.getElementById('uploadingIndicator');
+        const stickerToggle = document.getElementById('stickerToggle');
+        const stickerPickerWrapper = document.getElementById('stickerPickerWrapper');
+        const stickerTabs = document.getElementById('stickerTabs');
+        const stickerGrid = document.getElementById('stickerGrid');
 
         // Join room
         socket.emit('join-room', { roomId: roomId, userName: userName });
@@ -530,11 +874,11 @@
         // Emoji picker
         emojiToggle.addEventListener('click', (e) => {
             e.stopPropagation();
+            const isActive = emojiPickerWrapper.classList.contains('active');
+            // Close sticker picker if open
+            stickerPickerWrapper.classList.remove('active');
+            // Toggle emoji picker
             emojiPickerWrapper.classList.toggle('active');
-        });
-
-        document.addEventListener('click', () => {
-            emojiPickerWrapper.classList.remove('active');
         });
 
         emojiPicker.addEventListener('emoji-click', (event) => {
@@ -546,14 +890,30 @@
         emojiPickerWrapper.addEventListener('click', (e) => e.stopPropagation());
 
         // Romance emoji logic
-        const romanceEnabled = localStorage.getItem('romanceEmojiEnabled') === 'true';
-        const romanceEmojis = ["😘","😍","💋","❤️‍🔥","💕","💞","💓","💗","💖","💘","💝","💑","💏","🥰","😚","😙","😻","💌","💟","💐","💍"];
+        let romanceEnabled = localStorage.getItem('romanceEmojiEnabled') === 'true';
+        const romanceEmojis = ["😘","😍","💋","❤️‍🔥","💕","💞","💓","💗","💖","💘","💝","💑","💏","🥰","😚","😙","😻","💌","💟","💐","💍","❤️","🧡","💛","💚","💙","💜","🤎","🖤","🤍","🌹","🌺","🌸"];
 
         function setEmojiMode(mode) {
             if (mode === 'romance' && !romanceEnabled) {
-                alert('Enable the Romance Emoji Pack on the welcome page to access these emojis.');
-                return;
+                // Show consent dialog
+                const consent = confirm(
+                    '⚠️ Romance Emoji Pack\n\n' +
+                    'This pack contains romantic emojis (hearts, kisses, flowers).\n\n' +
+                    'By clicking OK, you confirm that:\n' +
+                    '• You want to access romantic emojis\n' +
+                    '• You understand this is for expressing love and affection\n\n' +
+                    'Do you want to enable the Romance Emoji Pack?'
+                );
+                
+                if (consent) {
+                    romanceEnabled = true;
+                    localStorage.setItem('romanceEmojiEnabled', 'true');
+                    renderRomanceEmojis();
+                } else {
+                    return;
+                }
             }
+            
             const showRomance = mode === 'romance';
             emojiAllBtn.classList.toggle('active', !showRomance);
             emojiRomanceBtn.classList.toggle('active', showRomance);
@@ -565,11 +925,20 @@
             if (!romanceEnabled) {
                 romanceLocked.style.display = 'block';
                 romanceGrid.innerHTML = '';
-                emojiRomanceBtn.classList.add('disabled');
+                romanceLocked.innerHTML = `
+                    <h6 style="color: #667eea; margin-bottom: 10px;">
+                        <i class="bi bi-heart-fill"></i> Romance Emoji Pack
+                    </h6>
+                    <p style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                        Click the Romance tab to enable romantic emojis!
+                    </p>
+                    <div style="font-size: 32px; margin: 10px 0;">
+                        😘 💋 ❤️ 💕 🌹
+                    </div>
+                `;
                 return;
             }
             romanceLocked.style.display = 'none';
-            emojiRomanceBtn.classList.remove('disabled');
             romanceGrid.innerHTML = '';
             romanceEmojis.forEach(emoji => {
                 const btn = document.createElement('button');
@@ -588,6 +957,154 @@
         emojiRomanceBtn.addEventListener('click', () => setEmojiMode('romance'));
         renderRomanceEmojis();
         setEmojiMode('all');
+
+        // Sticker Packs
+        const stickerPacks = {
+            fun: [
+                "😂", "🤣", "😆", "😁", "😄", "😃", "😀", "🥳",
+                "🤪", "😜", "😝", "🤗", "🤭", "🤫", "🤔", "🤨",
+                "😏", "😎", "🥸", "🤓", "🧐", "😇", "🥺", "😊",
+                "☺️", "😌", "😉", "🙃", "🙂", "😋", "😛", "😺"
+            ],
+            love: [
+                "❤️", "💕", "💞", "💓", "💗", "💖", "💘", "💝",
+                "💟", "❣️", "💌", "💑", "💏", "👩‍❤️‍👨", "👨‍❤️‍👨", "👩‍❤️‍👩",
+                "🫶", "🤟", "❤️‍🔥", "❤️‍🩹", "💔", "🧡", "💛", "💚",
+                "💙", "💜", "🤎", "🖤", "🤍", "💐", "🌹", "🌺"
+            ],
+            flirty: [
+                "😘", "😍", "🥰", "😚", "😙", "😗", "🤩", "😻",
+                "💋", "👄", "💄", "👅", "😽", "😸", "😹", "🙈",
+                "🙊", "😏", "😼", "😾", "🔥", "💥", "✨", "⭐",
+                "🌟", "💫", "🎀", "🎁", "🍑", "🍒", "🍓", "🍷"
+            ],
+            kiss: [
+                "💋", "😘", "😗", "😙", "😚", "😽", "👄", "💏",
+                "👩‍❤️‍💋‍👨", "👨‍❤️‍💋‍👨", "👩‍❤️‍💋‍👩", "💑", "🫦", "😻", "😍", "🥰",
+                "💕", "💞", "💓", "💗", "💖", "💘", "💝", "❤️",
+                "🌹", "💐", "🍷", "🍾", "🥂", "🎀", "✨", "💫"
+            ],
+            romantic: [
+                "🌹", "💐", "🌺", "🌸", "🌷", "🌻", "🏵️", "💮",
+                "🥀", "🌼", "🍀", "🌙", "⭐", "✨", "💫", "🌟",
+                "🕯️", "💍", "💎", "👑", "🎀", "🎁", "🍷", "🥂",
+                "🍾", "🍫", "🍰", "🧁", "🍓", "🍒", "🎵", "🎶"
+            ],
+            naughty: [
+                "😈", "👿", "😏", "😼", "🔥", "💥", "💦", "💨",
+                "🌶️", "🍑", "🍆", "🍌", "🥵", "🤤", "😋", "👅",
+                "💋", "👄", "🫦", "💄", "👙", "👗", "💃", "🕺",
+                "🍷", "🍾", "🥂", "🍻", "🎉", "🎊", "🎈", "🎁"
+            ]
+        };
+
+        let currentStickerPack = 'fun';
+
+        // Sticker Toggle
+        stickerToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isActive = stickerPickerWrapper.classList.contains('active');
+            // Close emoji picker if open
+            emojiPickerWrapper.classList.remove('active');
+            // Toggle sticker picker
+            stickerPickerWrapper.classList.toggle('active');
+            if (!isActive) {
+                renderStickers(currentStickerPack);
+            }
+        });
+
+        // Prevent closing when clicking inside pickers
+        stickerPickerWrapper.addEventListener('click', (e) => e.stopPropagation());
+
+        // Close both pickers when clicking anywhere in the chat room
+        document.addEventListener('click', (e) => {
+            // Check if click is outside both pickers and their toggle buttons
+            if (!stickerPickerWrapper.contains(e.target) && 
+                !emojiPickerWrapper.contains(e.target) &&
+                e.target !== stickerToggle && 
+                e.target !== emojiToggle) {
+                stickerPickerWrapper.classList.remove('active');
+                emojiPickerWrapper.classList.remove('active');
+            }
+        });
+
+        // Sticker Tab Click
+        stickerTabs.addEventListener('click', (e) => {
+            if (e.target.classList.contains('sticker-tab')) {
+                const pack = e.target.dataset.pack;
+                
+                // Check if naughty pack needs consent
+                if (pack === 'naughty' || pack === 'kiss' || pack === 'flirty') {
+                    const consent = localStorage.getItem('adultContentConsent');
+                    if (consent !== 'true') {
+                        showConsentModal(pack);
+                        return;
+                    }
+                }
+                
+                // Update active tab
+                document.querySelectorAll('.sticker-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                e.target.classList.add('active');
+                
+                currentStickerPack = pack;
+                renderStickers(pack);
+            }
+        });
+
+        // Render Stickers
+        function renderStickers(pack) {
+            stickerGrid.innerHTML = '';
+            const stickers = stickerPacks[pack];
+            
+            stickers.forEach(sticker => {
+                const stickerDiv = document.createElement('div');
+                stickerDiv.className = 'sticker-item';
+                stickerDiv.textContent = sticker;
+                stickerDiv.addEventListener('click', () => {
+                    sendSticker(sticker);
+                    stickerPickerWrapper.classList.remove('active');
+                });
+                stickerGrid.appendChild(stickerDiv);
+            });
+        }
+
+        // Send Sticker
+        function sendSticker(sticker) {
+            socket.emit('send-message', {
+                roomId: roomId,
+                userName: userName,
+                message: `[STICKER]${sticker}[/STICKER]`
+            });
+        }
+
+        // Show Consent Modal
+        function showConsentModal(pack) {
+            const consent = confirm(
+                `⚠️ Adult Content Warning\n\n` +
+                `The "${pack}" sticker pack contains flirty/romantic content.\n\n` +
+                `By clicking OK, you confirm that:\n` +
+                `• You are 18 years or older\n` +
+                `• You consent to view this content\n` +
+                `• You understand this is for fun and entertainment\n\n` +
+                `Do you want to continue?`
+            );
+            
+            if (consent) {
+                localStorage.setItem('adultContentConsent', 'true');
+                // Update active tab
+                document.querySelectorAll('.sticker-tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelector(`[data-pack="${pack}"]`).classList.add('active');
+                currentStickerPack = pack;
+                renderStickers(pack);
+            }
+        }
+
+        // Initialize stickers
+        renderStickers('fun');
 
         // Display message
         function displayMessage(user, text, timestamp, isOwn, fileData, fileName, fileType, fileSize, fileMimeType) {
@@ -646,7 +1163,13 @@
                     `;
                 }
             } else if (text) {
-                messageContent = `<div class="message-text">${escapeHtml(text)}</div>`;
+                // Check if it's a sticker
+                if (text.startsWith('[STICKER]') && text.endsWith('[/STICKER]')) {
+                    const sticker = text.replace('[STICKER]', '').replace('[/STICKER]', '');
+                    messageContent = `<div class="sticker-message">${sticker}</div>`;
+                } else {
+                    messageContent = `<div class="message-text">${escapeHtml(text)}</div>`;
+                }
             }
             
             messageDiv.innerHTML = `

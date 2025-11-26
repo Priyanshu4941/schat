@@ -4,9 +4,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const mongoose = require('mongoose');
 const path = require('path');
-const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -57,307 +55,89 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Import models
-const User = require('./models/User');
-const OTP = require('./models/OTP');
 const Room = require('./models/Room');
-const LoginAttempt = require('./models/LoginAttempt');
 const Message = require('./models/Message');
-// Choose email provider: 'gmail' or 'sendgrid'
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || 'gmail';
-
-let sendOTPEmail;
-if (EMAIL_PROVIDER === 'sendgrid' && process.env.SENDGRID_API_KEY) {
-  console.log('📧 Using SendGrid for emails');
-  const emailModule = require('./config/email-sendgrid');
-  sendOTPEmail = emailModule.sendOTPEmail;
-} else {
-  console.log('📧 Using Gmail (simple) for emails');
-  const emailModule = require('./config/email-simple');
-  sendOTPEmail = emailModule.sendOTPEmail;
-}
 
 // Store active users in rooms
 const activeUsers = new Map(); // roomId -> Set of userNames
 
-// Generate 6-digit OTP
-const generateOTP = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// Test email endpoint (for debugging)
-app.get('/test-email', async (req, res) => {
-  const testEmail = req.query.email || 'test@example.com';
-  const testOTP = '123456';
-  
-  console.log('🧪 Testing email configuration...');
-  console.log('Environment variables:', {
-    EMAILID: process.env.EMAILID,
-    PASSWORD: process.env.PASSWORD ? 'Set (hidden)' : 'NOT SET',
-    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'gmail',
-    SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? 'Set (hidden)' : 'NOT SET'
-  });
-  
-  const result = await sendOTPEmail(testEmail, testOTP);
-  
-  res.json({
-    success: result.success,
-    error: result.error || null,
-    message: result.success ? 'Email sent successfully!' : 'Email failed to send',
-    testEmail: testEmail,
-    testOTP: testOTP,
-    provider: EMAIL_PROVIDER
-  });
-});
-
-// Routes
+// Routes - Main login page
 app.get('/', (req, res) => {
-  res.render('register', { error: null, success: null });
+  res.render('login', { error: null });
 });
 
-// Login page
-app.get('/login', (req, res) => {
-  res.render('login', { error: null, email: '' });
-});
-
-// Login route
-app.post('/login', async (req, res) => {
+// Join/Create room route
+app.post('/join-room', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { userName, roomId, roomPassword, action } = req.body;
 
-    if (!email || !password) {
+    if (!userName || !roomId || !roomPassword) {
       return res.render('login', { 
-        error: 'Please fill in all fields', 
-        email: email || '' 
+        error: 'Please fill in all fields'
       });
     }
 
-    // Check for lockout
-    let loginAttempt = await LoginAttempt.findOne({ email: email.toLowerCase() });
+    const normalizedRoomId = roomId.toLowerCase().trim();
     
-    if (loginAttempt && loginAttempt.lockoutUntil) {
-      const now = new Date();
-      if (now < loginAttempt.lockoutUntil) {
-        const remainingSeconds = Math.ceil((loginAttempt.lockoutUntil - now) / 1000);
-        return res.render('login', { 
-          error: `Too many failed attempts. Please wait ${remainingSeconds} seconds.`, 
-          email: email,
-          lockout: true,
-          remainingSeconds: remainingSeconds
-        });
-      } else {
-        // Lockout expired, reset attempts
-        loginAttempt.attempts = 0;
-        loginAttempt.lockoutUntil = null;
-        await loginAttempt.save();
-      }
-    }
-
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
-    if (!user) {
-      // Increment failed attempts
-      if (!loginAttempt) {
-        loginAttempt = new LoginAttempt({ email: email.toLowerCase(), attempts: 1 });
-      } else {
-        loginAttempt.attempts += 1;
-        loginAttempt.lastAttempt = new Date();
-      }
-
-      // Lock after 5 attempts
-      if (loginAttempt.attempts >= 5) {
-        loginAttempt.lockoutUntil = new Date(Date.now() + 60 * 1000); // 1 minute lockout
-      }
-      await loginAttempt.save();
-
-      return res.render('login', { 
-        error: 'Invalid email or password', 
-        email: email,
-        attempts: loginAttempt.attempts,
-        lockout: loginAttempt.attempts >= 5
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    
-    if (!isPasswordValid) {
-      // Increment failed attempts
-      if (!loginAttempt) {
-        loginAttempt = new LoginAttempt({ email: email.toLowerCase(), attempts: 1 });
-      } else {
-        loginAttempt.attempts += 1;
-        loginAttempt.lastAttempt = new Date();
-      }
-
-      // Lock after 5 attempts
-      if (loginAttempt.attempts >= 5) {
-        loginAttempt.lockoutUntil = new Date(Date.now() + 60 * 1000); // 1 minute lockout
-      }
-      await loginAttempt.save();
-
-      return res.render('login', { 
-        error: 'Invalid email or password', 
-        email: email,
-        attempts: loginAttempt.attempts,
-        lockout: loginAttempt.attempts >= 5
-      });
-    }
-
-    // Successful login - reset attempts
-    if (loginAttempt) {
-      loginAttempt.attempts = 0;
-      loginAttempt.lockoutUntil = null;
-      await loginAttempt.save();
-    }
-
-    // Redirect to welcome page
-    res.redirect(`/welcome?user=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}`);
-  } catch (error) {
-    console.error('Error during login:', error);
-    res.render('login', { 
-      error: 'An error occurred. Please try again.', 
-      email: req.body.email || '' 
-    });
-  }
-});
-
-// Welcome page
-app.get('/welcome', (req, res) => {
-  const { user, email } = req.query;
-  if (!user || !email) {
-    return res.redirect('/login');
-  }
-  res.render('welcome', { userName: user, userEmail: email });
-});
-
-// Create room page
-app.get('/create-room', (req, res) => {
-  const { user, email } = req.query;
-  if (!user || !email) {
-    return res.redirect('/login');
-  }
-  res.render('create-room', { error: null, userName: user, userEmail: email });
-});
-
-// Create room route
-app.post('/create-room', async (req, res) => {
-  try {
-    const { roomId, roomName, password, userName, userEmail } = req.body;
-
-    if (!roomId || !roomName || !password) {
-      return res.render('create-room', { 
-        error: 'Please fill in all fields', 
-        userName: userName,
-        userEmail: userEmail,
-        roomId: roomId || '',
-        roomName: roomName || ''
-      });
-    }
-
-    // Check if room ID already exists
-    const existingRoom = await Room.findOne({ roomId: roomId.toLowerCase().trim() });
-    if (existingRoom) {
-      return res.render('create-room', { 
-        error: 'Room ID already exists. Please choose another one.', 
-        userName: userName,
-        userEmail: userEmail,
-        roomId: roomId,
-        roomName: roomName
-      });
-    }
-
-    // Create room (store password as plain text)
-    const room = new Room({
-      roomId: roomId.toLowerCase().trim(),
-      name: roomName,
-      password: password, // Store as plain text
-      createdBy: userName
-    });
-    await room.save();
-
-    // Redirect to chat room
-    res.redirect(`/chat?roomId=${encodeURIComponent(roomId.toLowerCase().trim())}&user=${encodeURIComponent(userName)}&email=${encodeURIComponent(userEmail)}`);
-  } catch (error) {
-    console.error('Error creating room:', error);
-    res.render('create-room', { 
-      error: 'An error occurred. Please try again.', 
-      userName: req.body.userName,
-      userEmail: req.body.userEmail,
-      roomId: req.body.roomId || '',
-      roomName: req.body.roomName || ''
-    });
-  }
-});
-
-// Enter room page
-app.get('/enter-room', (req, res) => {
-  const { user, email } = req.query;
-  if (!user || !email) {
-    return res.redirect('/login');
-  }
-  res.render('enter-room', { error: null, userName: user, userEmail: email });
-});
-
-// Enter room route
-app.post('/enter-room', async (req, res) => {
-  try {
-    const { roomId, password, userName, userEmail } = req.body;
-
-    if (!roomId || !password) {
-      return res.render('enter-room', { 
-        error: 'Please fill in all fields', 
-        userName: userName,
-        userEmail: userEmail,
-        roomId: roomId || ''
-      });
-    }
-
     // Find room
-    const room = await Room.findOne({ roomId: roomId.toLowerCase().trim() });
-    if (!room) {
-      return res.render('enter-room', { 
-        error: 'Room not found. Please check the Room ID.', 
-        userName: userName,
-        userEmail: userEmail,
-        roomId: roomId
+    let room = await Room.findOne({ roomId: normalizedRoomId });
+    
+    if (action === 'create') {
+      // Creating a new room
+      if (room) {
+        return res.render('login', { 
+          error: 'Room ID already exists. Please choose another one or join the existing room.'
+        });
+      }
+      
+      // Create new room
+      room = new Room({
+        roomId: normalizedRoomId,
+        name: roomId, // Use roomId as room name
+        password: roomPassword,
+        createdBy: userName
       });
+      await room.save();
+      
+      // Redirect to chat
+      res.redirect(`/chat?roomId=${encodeURIComponent(normalizedRoomId)}&user=${encodeURIComponent(userName)}`);
+    } else {
+      // Joining existing room
+      if (!room) {
+        return res.render('login', { 
+          error: 'Room not found. Please check the Room ID or create a new room.'
+        });
+      }
+      
+      // Verify password
+      if (roomPassword !== room.password) {
+        return res.render('login', { 
+          error: 'Incorrect room password.'
+        });
+      }
+      
+      // Redirect to chat
+      res.redirect(`/chat?roomId=${encodeURIComponent(normalizedRoomId)}&user=${encodeURIComponent(userName)}`);
     }
-
-    // Verify password (plain text comparison)
-    if (password !== room.password) {
-      return res.render('enter-room', { 
-        error: 'Incorrect password for this room.', 
-        userName: userName,
-        userEmail: userEmail,
-        roomId: roomId
-      });
-    }
-
-    // Redirect to chat room
-    res.redirect(`/chat?roomId=${encodeURIComponent(roomId.toLowerCase().trim())}&user=${encodeURIComponent(userName)}&email=${encodeURIComponent(userEmail)}`);
   } catch (error) {
-    console.error('Error entering room:', error);
-    res.render('enter-room', { 
-      error: 'An error occurred. Please try again.', 
-      userName: req.body.userName,
-      userEmail: req.body.userEmail,
-      roomId: req.body.roomId || ''
+    console.error('Error joining/creating room:', error);
+    res.render('login', { 
+      error: 'An error occurred. Please try again.'
     });
   }
 });
 
 // Chat room page
 app.get('/chat', async (req, res) => {
-  const { roomId, user, email } = req.query;
-  if (!roomId || !user || !email) {
-    return res.redirect('/login');
+  const { roomId, user } = req.query;
+  if (!roomId || !user) {
+    return res.redirect('/');
   }
 
   // Get room info
   const room = await Room.findOne({ roomId: roomId.toLowerCase().trim() });
   if (!room) {
-    return res.redirect('/welcome?user=' + encodeURIComponent(user) + '&email=' + encodeURIComponent(email));
+    return res.redirect('/');
   }
 
   // Get recent messages (last 50)
@@ -372,8 +152,7 @@ app.get('/chat', async (req, res) => {
   res.render('chat', { 
     roomId: roomId, 
     roomName: room.name,
-    userName: user, 
-    userEmail: email,
+    userName: user,
     messages: messages.reverse(),
     activeUsers: Array.from(usersInRoom)
   });
@@ -442,206 +221,7 @@ app.post('/upload-file', upload.single('file'), async (req, res) => {
   }
 });
 
-// Send OTP
-app.post('/send-otp', async (req, res) => {
-  try {
-    const { name, email } = req.body;
-
-    console.log('📧 OTP request received for:', email);
-
-    if (!name || !email) {
-      return res.render('register', { 
-        error: 'Please fill in all fields', 
-        success: null,
-        name: name || '',
-        email: email || ''
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.render('register', { 
-        error: 'User with this email already exists', 
-        success: null,
-        name: name,
-        email: email
-      });
-    }
-
-    // Generate OTP
-    const otp = generateOTP();
-    console.log('🔢 Generated OTP:', otp, 'for', email);
-
-    // Delete any existing OTP for this email
-    await OTP.deleteMany({ email: email.toLowerCase() });
-
-    // Save OTP to database
-    const otpRecord = new OTP({
-      email: email.toLowerCase(),
-      otp: otp,
-      expiresAt: new Date(Date.now() + 120 * 1000) // 120 seconds (2 minutes)
-    });
-    await otpRecord.save();
-    console.log('💾 OTP saved to database');
-
-    // Send OTP via email
-    console.log('📤 Attempting to send email...');
-    const emailResult = await sendOTPEmail(email, otp);
-    
-    // TEMPORARY: Show OTP on screen if email fails (for testing/debugging)
-    if (!emailResult.success) {
-      console.error('❌ Email sending failed:', emailResult.error);
-      console.log('⚠️  TEMPORARY: Showing OTP on screen for testing');
-      
-      // Still allow user to proceed with OTP verification
-      // In production, you should fix the email issue
-      return res.render('verify-otp', { 
-        email: email, 
-        name: name,
-        error: `Email service unavailable. Your OTP is: ${otp} (This is temporary - please setup SendGrid)`,
-        showOTP: otp // Pass OTP to display on screen
-      });
-    }
-
-    console.log('✅ OTP email sent successfully to:', email);
-
-    // Store name and email in session (using query params for simplicity)
-    res.render('verify-otp', { 
-      email: email, 
-      name: name,
-      error: null,
-      showOTP: null
-    });
-  } catch (error) {
-    console.error('❌ Error in send-otp route:', error);
-    res.render('register', { 
-      error: 'An error occurred. Please try again.', 
-      success: null,
-      name: req.body.name || '',
-      email: req.body.email || ''
-    });
-  }
-});
-
-// Verify OTP
-app.post('/verify-otp', async (req, res) => {
-  try {
-    const { email, otp, name } = req.body;
-
-    if (!otp) {
-      return res.render('verify-otp', { 
-        email: email, 
-        name: name,
-        error: 'Please enter OTP' 
-      });
-    }
-
-    // Find OTP record
-    const otpRecord = await OTP.findOne({ 
-      email: email.toLowerCase(),
-      otp: otp
-    });
-
-    if (!otpRecord) {
-      return res.render('verify-otp', { 
-        email: email, 
-        name: name,
-        error: 'Invalid OTP' 
-      });
-    }
-
-    // Check if OTP is expired
-    if (otpRecord.expiresAt < new Date()) {
-      await OTP.deleteOne({ _id: otpRecord._id });
-      return res.render('verify-otp', { 
-        email: email, 
-        name: name,
-        error: 'OTP has expired. Please request a new one.' 
-      });
-    }
-
-    // OTP is valid, delete it and proceed to password creation
-    await OTP.deleteOne({ _id: otpRecord._id });
-
-    res.render('create-password', { 
-      email: email, 
-      name: name,
-      error: null 
-    });
-  } catch (error) {
-    console.error('Error verifying OTP:', error);
-    res.render('verify-otp', { 
-      email: req.body.email, 
-      name: req.body.name,
-      error: 'An error occurred. Please try again.' 
-    });
-  }
-});
-
-// Create password
-app.post('/create-password', async (req, res) => {
-  try {
-    const { email, password, confirmPassword, name } = req.body;
-
-    if (!password || !confirmPassword) {
-      return res.render('create-password', { 
-        email: email, 
-        name: name,
-        error: 'Please fill in all fields' 
-      });
-    }
-
-    if (password.length < 6) {
-      return res.render('create-password', { 
-        email: email, 
-        name: name,
-        error: 'Password must be at least 6 characters long' 
-      });
-    }
-
-    if (password !== confirmPassword) {
-      return res.render('create-password', { 
-        email: email, 
-        name: name,
-        error: 'Passwords do not match' 
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.render('create-password', { 
-        email: email, 
-        name: name,
-        error: 'User already exists. Please login instead.' 
-      });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const user = new User({
-      name: name,
-      email: email.toLowerCase(),
-      password: hashedPassword
-    });
-    await user.save();
-
-    res.render('success', { 
-      name: name,
-      email: email 
-    });
-  } catch (error) {
-    console.error('Error creating password:', error);
-    res.render('create-password', { 
-      email: req.body.email, 
-      name: req.body.name,
-      error: 'An error occurred. Please try again.' 
-    });
-  }
-});
+// No additional routes needed - simplified flow
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

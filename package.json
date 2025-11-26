@@ -1,7 +1,7 @@
 {
-  "name": "otp-verification-app",
-  "version": "1.0.0",
-  "description": "OTP verification and user registration app",
+  "name": "chat-room-app",
+  "version": "2.0.0",
+  "description": "Simple and secure room-based chat application",
   "main": "server.js",
   "scripts": {
     "start": "nodemon server.js",
@@ -9,23 +9,19 @@
     "prod": "node server.js"
   },
   "keywords": [
-    "otp",
-    "verification",
-    "email",
-    "authentication"
+    "chat",
+    "room",
+    "messaging",
+    "socket.io"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@sendgrid/mail": "^8.1.6",
-    "bcryptjs": "^2.4.3",
     "dotenv": "^16.6.1",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
-    "googleapis": "^166.0.0",
     "mongoose": "^7.5.0",
     "multer": "^2.0.2",
-    "nodemailer": "^6.9.7",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
